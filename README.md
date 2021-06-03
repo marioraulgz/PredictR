@@ -1,13 +1,4 @@
 # PredictR
----
-title: "PredictRmd"
-author: "Mario Raul"
-date: "8/9/2020"
-output:
-  html_document:
-    keep_md: yes
----
-
 
 
 ## About
