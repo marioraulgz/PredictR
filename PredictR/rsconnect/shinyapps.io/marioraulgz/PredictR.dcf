@@ -1,0 +1,13 @@
+name: PredictR
+title: PredictR
+username:
+account: marioraulgz
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2771984
+bundleId: 3608145
+url: https://marioraulgz.shinyapps.io/PredictR/
+when: 1599600487.74238
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: app_data/PredictRmd.md|app_data/PredictRmd.Rmd

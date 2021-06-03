@@ -1,0 +1,44 @@
+#
+# This is the user-interface definition of a Shiny web application. You can
+# run the application by clicking 'Run App' above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+
+library(shiny)
+library(shinythemes)
+library(shinycssloaders)
+library(knitr)
+
+
+# Define UI for application that draws a histogram
+shinyUI(fluidPage(theme = shinytheme("sandstone"),
+                  navbarPage(id = "navtab","PredictR!",  
+                             tabPanel(title = "App", value ="app"),
+                             tabPanel(title="About", value ="about", withMathJax(includeMarkdown("PredictRmd.md")))
+                             ), 
+    # Sidebar with a slider input for number of bins
+    sidebarLayout(
+        sidebarPanel(
+            h5("Input word and set alpha (0.4 recommended)"),
+            textInput("txt", "Enter a sentence to predict:", "text here"),
+            sliderInput("slider", "Alpha (Backoff factor):" ,0, 1.0, .4),
+            submitButton("Predict!"),
+            br(),
+            tags$div(class="header", checked=NA,
+                     tags$p("By Mario Raul,"),
+                     tags$a(href="https://github.com/marioraulgz", "Github.")
+            )
+        ),
+        # Show a plot of the generated distribution
+        mainPanel(
+            h3(htmlOutput("predictedHtml")),
+            h4("Score of the most possible predictions according to Stupid Backoff:"),
+            withSpinner(plotOutput("plot1"), type = 4, color = "#c81d11", size = 2),
+            actionLink("link_to_tabpanel_about", "Learn more about the model.")
+        )
+    )
+))
+

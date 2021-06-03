@@ -1,0 +1,174 @@
+---
+title: "Milestone Capstone"
+author: "Mario Raul"
+date: "4/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview  
+With a final goal to build a word predicting web app, a series of analyses will be done to this [dataset](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip), provided by Swiftkey via Coursera; consisting of a zip file with four folders, containing blogs, news and Twitter data scrapings in 4 different languages.
+
+## Loading the data and libraries  
+```{r, message =FALSE}
+library(tidyr)
+library(dplyr)
+library(tidytext)
+library(ngram)
+library(stringr)
+library(ggplot2)
+#In the root folder where we unzipped the data
+english_blogs <- "en_US/en_US.blogs.txt"
+english_news <- "en_US/en_US.news.txt"
+english_twitter <- "en_US/en_US.twitter.txt"
+
+#Size of data in mb
+size_blogs <- file.size(english_blogs)/(2^20)
+size_twitter <- file.size(english_news)/(2^20)
+size_news <- file.size(english_twitter)/(2^20)
+
+paste("The size of the english blogs data in mb is:", size_blogs)
+paste("The size of the english Twitter data in mb is:", size_twitter)
+paste("The size of the english news data in mb is:", size_news)
+
+```  
+As we can see, they are pretty heavy to continue performing all the data operations on them, considering that R stores all the workload in RAM. We will sample the data to tackle this later on. Lets load the actual lines:  
+
+```{r, eval=FALSE}
+twitter <-readLines(con = english_twitter, skipNul = TRUE)
+blogs <-readLines(con = english_blogs, skipNul = TRUE)
+news <-readLines(con = english_news, skipNul = TRUE)
+
+ltwitter <- length(twitter)
+lblogs <- length(blogs)
+lnews <- length(news)
+
+```  
+This is the summary of the data, for performance issues we wont be performing the whole dissection of it (my laptop is very old and running the whole process again would take ages, given that knitr starts a workspace from scratch).
+```{r, echo =FALSE}
+summ <- data.frame(rbind(c("blogs", 200.4242, 899288, 208361438, 37334131, 0.36, 0.21, 0.37), c("news", 196.2775, 1010242, 203791400, 34372528, 0.35, 0.24, 0.34), c("twitter", 159.3641, 2360148, 162385035, 30373583, 0.28, 0.55, 0.30)))
+colnames(summ)<-c("f_names", "f_size", "f_lines", "n_char", "n_words", "pct_n_char", "pct_lines", "pct_words")
+summ
+```
+Now, lets sample the data, taking the 20% of each source to help in the overall performance of the analysis.  
+
+```{r, eval = FALSE}
+set.seed(1337)
+pct <- 0.2
+sample_blogs <- blogs %>% sample(, lblogs * pct) %>% tibble()
+sample_twitter <- twitter %>% sample(, ltwitter * pct) %>% tibble()
+sample_news <- news %>% sample(, lnews * pct) %>% tibble()
+sample_repo <- bind_rows(mutate(sample_blogs, source = "blogs"),
+                         mutate(sample_news,  source = "news"),
+                         mutate(sample_twitter, source = "twitter")) 
+
+sample_repo$source <- as.factor(sample_repo$source)
+names(sample_repo) <- c("text", "source")
+```  
+## Data Cleaning.  
+Given the nature of the origin of the data, it needed to be cleaned before we could plug it into the tools that libraries such as `tidytext` offer us. Lets load the libraries needed for this. (The naughty.txt was obtained from  [LDNOOBW
+/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words](https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words)
+```{r, eval = FALSE}
+bad_words <-as_tibble(read.table("en_US/naughty.txt", sep = "\n",  header = FALSE, col.names ="word" ))
+  regex_url <- "http[^[:space:]]*"
+regex_reg <- "[^[:alpha:][:space:]]*"
+regex_aaa <- "\\b(?=\\w*(\\w)\\1)\\w+\\b"  
+
+
+clean_sample <-  sample_repo %>%
+  mutate(text = str_replace_all(text, regex_url, "")) %>%
+  mutate(text = str_replace_all(text, regex_reg, "")) %>%
+  mutate(text = str_replace_all(text, regex_aaa, "")) %>% 
+  mutate(text = iconv(text, "ASCII//TRANSLIT"))
+```  
+First  
+
+## Tokens and Ngrams:
+
+Ngrams are the basic units in the text analysis, they correspond to certain letters (in case of ngrams) or words combinations that can help us detect patterns and subtext in data. Lets use of the `tidytext` library to aid us in creating tokens out of the clean sample. This will give each individual word in a row and allow us to perform statistical analysis with them.
+
+```{r, eval = FALSE}
+#Tidy repo by tokenizing
+tidy_repo <- clean_sample %>%
+  unnest_tokens(word, text) %>%
+  anti_join(bad_words) %>%
+  anti_join(stop_words)
+
+rm(blogs,newsLines,twitterLines, news , regex_aaa,regex_reg,regex_url,blogs_nchar_sum, news_nchar_sum, twitter_nchar_sum, twitter)
+```
+Now, we are interested in seeing the distribution of the most common words (or unigrams), and also, to get information on what words cover 90% and 50% of the texts.
+```{r, eval = FALSE}
+#Most common words
+common_words <- tidy_repo %>%
+  count(word, sort = TRUE) 
+
+#Words that cover the 50% and 90% of the tokens
+cover <- common_words %>%  
+  mutate(proportion = n / sum(n)) %>%
+  arrange(desc(proportion)) %>%  
+  mutate(coverage = cumsum(proportion))
+cover_50 <- cover %>% filter(coverage <= 0.5)
+nrow(cover_50)
+
+cover_90 <- cover %>% filter(coverage <= 0.5)
+nrow(cover_90)
+
+```
+
+#### Unigram distribution  
+![unigram](en_US/unigram_dist.png)
+![unigram by source](en_US/unigram_source.png)  
+There seem to be some words that are inherently natural to just one kind of source, such as "rt" (abbreviation for retweet) for Twitter, "percent" for News and "ic" (abbreviation for i see) in Blogs
+### Bigrams and so on  
+To generate the bigrams, trigrams and quadragrams, we follow a similar procedure to the one with the individual words, with the difference that we actually want the stop words to ensure fluid text and modifying the parameters of the `unnest_token`
+
+
+```{r, eval =FALSE}
+#bigrams
+bigrams <-  clean_sample %>%
+            unnest_tokens(bigram, text, token="ngrams", n = 2) %>% anti_join(bad_words)
+
+bigrams_cover <- bigrams %>%count(bigram, sort =TRUE) %>% 
+   mutate(proportion = n/sum(n)) %>% 
+   arrange(desc(proportion)) %>% mutate(coverage = cumsum(proportion))
+bigrams_cover_90 <- bigrams_cover %>% filter(coverage <= .9)
+
+#trigrams
+trigrams <- clean_sample %>%
+            unnest_tokens(trigram, text, token="ngrams", n = 3) %>% anti_join(bad_words)
+
+trigrams_cover <- trigrams %>%count(trigram, sort =TRUE) %>% 
+  mutate(proportion = n/sum(n)) %>% 
+  arrange(desc(proportion)) %>% mutate(coverage = cumsum(proportion))
+
+trigrams_cover_90 <- trigrams_cover %>% filter(coverage <= .9)
+
+#Quadragrams
+quadragrams <- clean_sample %>% 
+              unnest_tokens(quadragram, text, token="ngrams", n = 4) %>% anti_join(bad_words, by =c("quadragram"="word"))
+
+quadragrams_cover <- quadragrams %>%count(quadragram, sort =TRUE) %>% 
+  mutate(proportion = n/sum(n)) %>% 
+  arrange(desc(proportion)) %>% mutate(coverage = cumsum(proportion))
+
+quadragrams_cover_90 <- quadragrams_cover %>% filter(coverage <= .9)  
+```  
+Now, lets plot the distributions with `ggplot2`
+  
+  
+#### Bigram distribution  
+![Bigram](en_US/bigram_dist.png)  
+
+### Trigram distribution  
+![Trigram](en_US/trigram_dist.png)  
+
+### Quadragram distribution  
+![Quadragram](en_US/quadragrams_dist.png)  
+
+## Prediction Model  
+My current line of thought is leaning towards a more direct approach, where the program reads the number of words, and according to that, matches the prediction with the most common bigram, trigram o quadragram. If there are more than 4 words, it would take the last three and match it with the correspondent quadragram. Markov Chains will be researched to see if their implementation will be beneficial in both terms of speed and accuracy, compared to the proposed model.  
+
+For unknown words, a random word or stopword will be predicted.
